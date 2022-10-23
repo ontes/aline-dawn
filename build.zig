@@ -30,29 +30,29 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
     const options = Options.standard(b, target);
 
-    const lib = addLib(b, target, mode, options);
-    lib.install();
+    const shared_lib = b.addSharedLibrarySource("webgpu_dawn", null, .unversioned);
+    shared_lib.setTarget(target);
+    shared_lib.setBuildMode(mode);
+    link(shared_lib, options);
+    shared_lib.install();
 }
 
-pub fn addLib(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
-    const lib = b.addSharedLibrarySource("webgpu", null, .unversioned);
-    lib.setTarget(target);
-    lib.setBuildMode(mode);
-    lib.linkLibCpp();
+pub fn link(step: *std.build.LibExeObjStep, options: Options) void {
+    const b = step.builder;
+    const target = step.target;
+    const mode = step.build_mode;
 
-    lib.addIncludePath(root_dir ++ "dawn/include");
-    lib.addIncludePath(root_dir ++ "dawn-gen/include");
+    step.linkLibCpp();
+    step.addIncludePath(root_dir ++ "dawn/include");
+    step.addIncludePath(root_dir ++ "dawn-gen/include");
+    step.addCSourceFiles(&.{root_dir ++ "dawn-gen/src/dawn/native/webgpu_dawn_native_proc.cpp"}, c_flags);
 
-    lib.addCSourceFiles(&.{root_dir ++ "dawn-gen/src/dawn/native/webgpu_dawn_native_proc.cpp"}, c_flags);
-
-    lib.linkLibrary(addLibDawnCommon(b, target, mode, options));
-    lib.linkLibrary(addLibDawnPlatform(b, target, mode, options));
-    lib.linkLibrary(addLibDawnNative(b, target, mode, options));
-    lib.linkLibrary(addLibTint(b, target, mode, options));
-    lib.linkLibrary(addLibSpvtools(b, target, mode));
-    lib.linkLibrary(addLibAbslStrings(b, target, mode));
-
-    return lib;
+    step.linkLibrary(addLibDawnCommon(b, target, mode, options));
+    step.linkLibrary(addLibDawnPlatform(b, target, mode, options));
+    step.linkLibrary(addLibDawnNative(b, target, mode, options));
+    step.linkLibrary(addLibTint(b, target, mode, options));
+    step.linkLibrary(addLibSpvtools(b, target, mode));
+    step.linkLibrary(addLibAbslStrings(b, target, mode));
 }
 
 fn includeDawn(lib: *std.build.LibExeObjStep, options: Options) void {
@@ -509,11 +509,13 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
         src_dir ++ "ast/block_statement.cc",
         src_dir ++ "ast/bool.cc",
         src_dir ++ "ast/bool_literal_expression.cc",
+        src_dir ++ "ast/break_if_statement.cc",
         src_dir ++ "ast/break_statement.cc",
         src_dir ++ "ast/builtin_attribute.cc",
         src_dir ++ "ast/builtin_value.cc",
         src_dir ++ "ast/call_expression.cc",
         src_dir ++ "ast/call_statement.cc",
+        src_dir ++ "ast/case_selector.cc",
         src_dir ++ "ast/case_statement.cc",
         src_dir ++ "ast/compound_assignment_statement.cc",
         src_dir ++ "ast/const.cc",
@@ -602,8 +604,8 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
         src_dir ++ "program_id.cc",
         src_dir ++ "reader/reader.cc",
         src_dir ++ "resolver/const_eval.cc",
-        src_dir ++ "resolver/ctor_conv_intrinsic.cc",
         src_dir ++ "resolver/dependency_graph.cc",
+        src_dir ++ "resolver/init_conv_intrinsic.cc",
         src_dir ++ "resolver/intrinsic_table.cc",
         src_dir ++ "resolver/resolver.cc",
         src_dir ++ "resolver/sem_helper.cc",
@@ -620,6 +622,7 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
         src_dir ++ "transform/builtin_polyfill.cc",
         src_dir ++ "transform/calculate_array_length.cc",
         src_dir ++ "transform/canonicalize_entry_point_io.cc",
+        src_dir ++ "transform/clamp_frag_depth.cc",
         src_dir ++ "transform/combine_samplers.cc",
         src_dir ++ "transform/decompose_memory_access.cc",
         src_dir ++ "transform/decompose_strided_array.cc",
@@ -653,13 +656,15 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
         src_dir ++ "transform/utils/hoist_to_decl_before.cc",
         src_dir ++ "transform/var_for_dynamic_index.cc",
         src_dir ++ "transform/vectorize_matrix_conversions.cc",
-        src_dir ++ "transform/vectorize_scalar_matrix_constructors.cc",
+        src_dir ++ "transform/vectorize_scalar_matrix_initializers.cc",
         src_dir ++ "transform/vertex_pulling.cc",
         src_dir ++ "transform/while_to_loop.cc",
         src_dir ++ "transform/zero_init_workgroup_memory.cc",
         src_dir ++ "utils/debugger.cc",
+        src_dir ++ "utils/string.cc",
         src_dir ++ "writer/append_vector.cc",
         src_dir ++ "writer/array_length_from_uniform_options.cc",
+        src_dir ++ "writer/check_supported_extensions.cc",
         src_dir ++ "writer/flatten_bindings.cc",
         src_dir ++ "writer/float_to_string.cc",
         src_dir ++ "writer/generate_external_texture_bindings.cc",
@@ -674,6 +679,7 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
         src_dir ++ "sem/behavior.cc",
         src_dir ++ "sem/block_statement.cc",
         src_dir ++ "sem/bool.cc",
+        src_dir ++ "sem/break_if_statement.cc",
         src_dir ++ "sem/builtin.cc",
         src_dir ++ "sem/builtin_type.cc",
         src_dir ++ "sem/call.cc",
@@ -709,8 +715,8 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
         src_dir ++ "sem/switch_statement.cc",
         src_dir ++ "sem/texture.cc",
         src_dir ++ "sem/type.cc",
-        src_dir ++ "sem/type_constructor.cc",
         src_dir ++ "sem/type_conversion.cc",
+        src_dir ++ "sem/type_initializer.cc",
         src_dir ++ "sem/type_manager.cc",
         src_dir ++ "sem/u32.cc",
         src_dir ++ "sem/variable.cc",
