@@ -13,14 +13,14 @@ pub const Options = struct {
     pub fn standard(b: *std.build.Builder, target: std.zig.CrossTarget) Options {
         const os_tag = getOsTag(target);
         return .{
-            .enable_d3d12 = b.option(bool, "enable-d3d12", "") orelse (os_tag == .windows),
-            .enable_metal = b.option(bool, "enable-metal", "") orelse (os_tag == .macos),
-            .enable_null = b.option(bool, "enable-null", "") orelse true,
-            .enable_opengl = b.option(bool, "enable-opengl", "") orelse (os_tag == .linux),
-            .enable_opengles = b.option(bool, "enable-opengles", "") orelse (os_tag == .linux),
-            .enable_vulkan = b.option(bool, "enable-vulkan", "") orelse (os_tag == .windows or os_tag == .linux),
-            .use_wayland = b.option(bool, "use-wayland", "") orelse false,
-            .use_x11 = b.option(bool, "use-x11", "") orelse (os_tag == .linux),
+            .enable_d3d12 = b.option(bool, "enable-d3d12", "enable DirectX 12 backend") orelse (os_tag == .windows),
+            .enable_metal = b.option(bool, "enable-metal", "enable Metal backend") orelse (os_tag == .macos),
+            .enable_null = b.option(bool, "enable-null", "enable Null backend") orelse true,
+            .enable_opengl = b.option(bool, "enable-opengl", "enable OpenGL backend") orelse (os_tag == .linux),
+            .enable_opengles = b.option(bool, "enable-opengles", "enable OpenGL ES backend") orelse (os_tag == .linux),
+            .enable_vulkan = b.option(bool, "enable-vulkan", "enable Vulkan backend") orelse (os_tag == .windows or os_tag == .linux),
+            .use_wayland = b.option(bool, "use-wayland", "use Wayland") orelse false,
+            .use_x11 = b.option(bool, "use-x11", "use X11") orelse (os_tag == .linux),
         };
     }
 };
@@ -30,7 +30,7 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
     const options = Options.standard(b, target);
 
-    const shared_lib = b.addSharedLibrarySource("webgpu_dawn", null, .unversioned);
+    const shared_lib = b.addSharedLibrary("webgpu_dawn", null, .unversioned);
     shared_lib.setTarget(target);
     shared_lib.setBuildMode(mode);
     link(shared_lib, options);
@@ -47,12 +47,12 @@ pub fn link(step: *std.build.LibExeObjStep, options: Options) void {
     step.addIncludePath(root_dir ++ "dawn-gen/include");
     step.addCSourceFiles(&.{root_dir ++ "dawn-gen/src/dawn/native/webgpu_dawn_native_proc.cpp"}, c_flags);
 
-    step.linkLibrary(addLibDawnCommon(b, target, mode, options));
-    step.linkLibrary(addLibDawnPlatform(b, target, mode, options));
-    step.linkLibrary(addLibDawnNative(b, target, mode, options));
-    step.linkLibrary(addLibTint(b, target, mode, options));
-    step.linkLibrary(addLibSpvtools(b, target, mode));
-    step.linkLibrary(addLibAbslStrings(b, target, mode));
+    step.linkLibrary(addDawnCommon(b, target, mode, options));
+    step.linkLibrary(addDawnPlatform(b, target, mode, options));
+    step.linkLibrary(addDawnNative(b, target, mode, options));
+    step.linkLibrary(addTint(b, target, mode, options));
+    step.linkLibrary(addSpvtools(b, target, mode));
+    step.linkLibrary(addAbslStrings(b, target, mode));
 }
 
 fn includeDawn(lib: *std.build.LibExeObjStep, options: Options) void {
@@ -61,6 +61,7 @@ fn includeDawn(lib: *std.build.LibExeObjStep, options: Options) void {
     lib.addIncludePath(root_dir ++ "dawn-gen/src");
     lib.addIncludePath(root_dir ++ "dawn/include");
     lib.addIncludePath(root_dir ++ "dawn-gen/include");
+    lib.addIncludePath(root_dir ++ "include");
 
     if (options.enable_d3d12)
         lib.defineCMacro("DAWN_ENABLE_BACKEND_D3D12", null);
@@ -94,7 +95,7 @@ fn includeAbsl(lib: *std.build.LibExeObjStep) void {
 }
 
 // based on dawn/src/dawn/common/BUILD.gn
-fn addLibDawnCommon(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
+fn addDawnCommon(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
     const lib = b.addStaticLibrarySource("dawn_common", null);
     lib.setTarget(target);
     lib.setBuildMode(mode);
@@ -118,22 +119,20 @@ fn addLibDawnCommon(b: *std.build.Builder, target: std.zig.CrossTarget, mode: st
         gen_dir ++ "GPUInfo_autogen.cpp",
     }, c_flags);
 
-    const os_tag = getOsTag(target);
-
-    if (os_tag == .macos)
+    if (getOsTag(target) == .macos)
         lib.addCSourceFiles(&.{src_dir ++ "SystemUtils_mac.mm"}, c_flags);
-    if (os_tag == .windows)
+    if (getOsTag(target) == .windows)
         lib.addCSourceFiles(&.{src_dir ++ "WindowsUtils.cpp"}, c_flags);
     if (options.enable_vulkan)
         lib.addIncludePath(root_dir ++ "vulkan-headers/include");
-    // if (os_tag == .android)
-    //     step.linkSystemLibrary("log");
+    // if (getOsTag(target) == .android)
+    //     lib.linkSystemLibrary("log");
 
     return lib;
 }
 
 // based on dawn/src/dawn/platform/BUILD.gn
-fn addLibDawnPlatform(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
+fn addDawnPlatform(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
     const lib = b.addStaticLibrarySource("dawn_platform", null);
     lib.setTarget(target);
     lib.setBuildMode(mode);
@@ -153,7 +152,7 @@ fn addLibDawnPlatform(b: *std.build.Builder, target: std.zig.CrossTarget, mode: 
 }
 
 // based on dawn/src/dawn/native/BUILD.gn
-fn addLibDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
+fn addDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
     const lib = b.addStaticLibrarySource("dawn_native", null);
     lib.setTarget(target);
     lib.setBuildMode(mode);
@@ -247,7 +246,8 @@ fn addLibDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: st
         src_dir ++ "StagingBuffer.cpp",
         src_dir ++ "StreamImplTint.cpp",
         src_dir ++ "Subresource.cpp",
-        src_dir ++ "Surface.cpp",
+        // src_dir ++ "Surface.cpp",
+        root_dir ++ "Surface.cpp", // does not require windows core headers
         src_dir ++ "SwapChain.cpp",
         src_dir ++ "Texture.cpp",
         src_dir ++ "TintUtils.cpp",
@@ -267,17 +267,18 @@ fn addLibDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: st
         gen_dir ++ "ObjectType_autogen.cpp",
     }, c_flags);
 
-    const os_tag = getOsTag(target);
-
     if (options.use_x11) {
         lib.linkSystemLibrary("X11");
         lib.addCSourceFiles(&.{src_dir ++ "XlibXcbFunctions.cpp"}, c_flags);
     }
-    if (os_tag == .windows) {
-        lib.linkSystemLibrary("user32.lib");
+    if (getOsTag(target) == .windows) {
+        lib.linkSystemLibrary("user32");
+        // fix issues in dxcapi.h
+        lib.defineCMacro("_Maybenull_", "");
+        lib.defineCMacro("CROSS_PLATFORM_UUIDOF(interface, spec)", "");
     }
     if (options.enable_d3d12) {
-        lib.linkSystemLibrary("dxguid.lib");
+        lib.linkSystemLibrary("dxguid");
         lib.addCSourceFiles(&.{
             src_dir ++ "d3d12/D3D12Backend.cpp",
             src_dir ++ "d3d12/AdapterD3D12.cpp",
@@ -325,11 +326,11 @@ fn addLibDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: st
         }, c_flags);
     }
     if (options.enable_metal) {
-        lib.linkFrameworkWeak("Metal.framework");
-        lib.linkFramework("Cocoa.framework");
-        lib.linkFramework("IOKit.framework");
-        lib.linkFramework("IOSurface.framework");
-        lib.linkFramework("QuartzCore.framework");
+        lib.linkFrameworkWeak("Metal");
+        lib.linkFramework("Cocoa");
+        lib.linkFramework("IOKit");
+        lib.linkFramework("IOSurface");
+        lib.linkFramework("QuartzCore");
         lib.addCSourceFiles(&.{
             src_dir ++ "metal/MetalBackend.mm",
             src_dir ++ "Surface_metal.mm",
@@ -397,7 +398,6 @@ fn addLibDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: st
     }
     if (options.enable_vulkan) {
         lib.addIncludePath(root_dir ++ "vulkan-headers/include");
-        lib.addIncludePath(root_dir ++ "vulkan-tools"); // requires just "icd/generated/vk_typemap_helper.h"
         lib.addCSourceFiles(&.{
             src_dir ++ "vulkan/VulkanBackend.cpp",
             src_dir ++ "vulkan/AdapterVk.cpp",
@@ -432,39 +432,37 @@ fn addLibDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: st
             src_dir ++ "vulkan/VulkanInfo.cpp",
             src_dir ++ "vulkan/external_memory/MemoryService.cpp",
         }, c_flags);
-        if (os_tag == .windows)
+        if (getOsTag(target) == .windows)
             lib.defineCMacro("VK_USE_PLATFORM_WIN32_KHR", null);
-        if (os_tag == .linux and options.use_x11)
+        if (getOsTag(target) == .linux and options.use_x11)
             lib.defineCMacro("VK_USE_PLATFORM_XCB_KHR", null);
-        if (os_tag == .linux and options.use_wayland)
+        if (getOsTag(target) == .linux and options.use_wayland)
             lib.defineCMacro("VK_USE_PLATFORM_WAYLAND_KHR", null);
-        // if (os_tag == .android)
+        // if (getOsTag(target) == .android)
         //     lib.defineCMacro("VK_USE_PLATFORM_ANDROID_KHR", null);
-        if (os_tag == .fuchsia)
+        if (getOsTag(target) == .fuchsia)
             lib.defineCMacro("VK_USE_PLATFORM_FUCHSIA", null);
-        if (os_tag == .macos)
+        if (getOsTag(target) == .macos)
             lib.defineCMacro("VK_USE_PLATFORM_METAL_EXT", null);
-        // if (os_tag == .ggp)
-        //     lib.defineCMacro("VK_USE_PLATFORM_GGP", null);
 
-        // if (os_tag == .chromeos) {
+        // if (getOsTag(target) == .chromeos) {
         //     lib.addCSourceFiles(&.{
         //         src_dir ++ "vulkan/external_memory/MemoryServiceDmaBuf.cpp",
         //         src_dir ++ "vulkan/external_semaphore/SemaphoreServiceFD.cpp",
         //     }, c_flags);
         //     lib.defineCMacro("DAWN_USE_SYNC_FDS", null);
-        // } else if (os_tag == .android) {
+        // } else if (getOsTag(target) == .android) {
         //     lib.addCSourceFiles(&.{
         //         src_dir ++ "vulkan/external_memory/MemoryServiceAHardwareBuffer.cpp",
         //         src_dir ++ "vulkan/external_semaphore/SemaphoreServiceFD.cpp",
         //     }, c_flags);
         // }
-        if (os_tag == .linux) {
+        if (getOsTag(target) == .linux) {
             lib.addCSourceFiles(&.{
                 src_dir ++ "vulkan/external_memory/MemoryServiceOpaqueFD.cpp",
                 src_dir ++ "vulkan/external_semaphore/SemaphoreServiceFD.cpp",
             }, c_flags);
-        } else if (os_tag == .fuchsia) {
+        } else if (getOsTag(target) == .fuchsia) {
             lib.addCSourceFiles(&.{
                 src_dir ++ "vulkan/external_memory/MemoryServiceZirconHandle.cpp",
                 src_dir ++ "vulkan/external_semaphore/SemaphoreServiceZirconHandle.cpp",
@@ -479,16 +477,18 @@ fn addLibDawnNative(b: *std.build.Builder, target: std.zig.CrossTarget, mode: st
         // if (enable_vulkan_loader)
         // if (use_swiftshader)
     }
+
     return lib;
 }
 
 // based on dawn/src/tint/BUILD.gn
-fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
+fn addTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: Options) *std.build.LibExeObjStep {
     const lib = b.addStaticLibrarySource("tint", null);
     lib.setTarget(target);
     lib.setBuildMode(mode);
     lib.linkLibCpp();
 
+    includeSprvtools(lib);
     lib.addIncludePath(root_dir ++ "dawn");
     lib.addIncludePath(root_dir ++ "dawn/include");
 
@@ -732,26 +732,27 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
         src_dir ++ "reader/wgsl/parser_impl.cc",
         src_dir ++ "reader/wgsl/token.cc",
     }, c_flags);
+
     lib.defineCMacro("TINT_BUILD_WGSL_WRITER", null);
     lib.addCSourceFiles(&.{
         src_dir ++ "writer/wgsl/generator.cc",
         src_dir ++ "writer/wgsl/generator_impl.cc",
     }, c_flags);
 
+    lib.defineCMacro("TINT_BUILD_SPV_READER", null);
+    lib.addCSourceFiles(&.{
+        src_dir ++ "reader/spirv/construct.cc",
+        src_dir ++ "reader/spirv/entry_point_info.cc",
+        src_dir ++ "reader/spirv/enum_converter.cc",
+        src_dir ++ "reader/spirv/function.cc",
+        src_dir ++ "reader/spirv/namer.cc",
+        src_dir ++ "reader/spirv/parser.cc",
+        src_dir ++ "reader/spirv/parser_impl.cc",
+        src_dir ++ "reader/spirv/parser_type.cc",
+        src_dir ++ "reader/spirv/usage.cc",
+    }, c_flags);
+
     if (options.enable_vulkan) {
-        includeSprvtools(lib);
-        lib.defineCMacro("TINT_BUILD_SPV_READER", null);
-        lib.addCSourceFiles(&.{
-            src_dir ++ "reader/spirv/construct.cc",
-            src_dir ++ "reader/spirv/entry_point_info.cc",
-            src_dir ++ "reader/spirv/enum_converter.cc",
-            src_dir ++ "reader/spirv/function.cc",
-            src_dir ++ "reader/spirv/namer.cc",
-            src_dir ++ "reader/spirv/parser.cc",
-            src_dir ++ "reader/spirv/parser_impl.cc",
-            src_dir ++ "reader/spirv/parser_type.cc",
-            src_dir ++ "reader/spirv/usage.cc",
-        }, c_flags);
         lib.defineCMacro("TINT_BUILD_SPV_WRITER", null);
         lib.addCSourceFiles(&.{
             src_dir ++ "writer/spirv/binary_writer.cc",
@@ -793,7 +794,7 @@ fn addLibTint(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.buil
 
 // based on spirv-tools/BUILD.gn
 // NOTE: only builds files that Dawn requires
-fn addLibSpvtools(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) *std.build.LibExeObjStep {
+fn addSpvtools(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) *std.build.LibExeObjStep {
     const lib = b.addStaticLibrarySource("spvtools", null);
     lib.setTarget(target);
     lib.setBuildMode(mode);
@@ -900,7 +901,7 @@ fn addLibSpvtools(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.
 
 // based on abseil-cpp/absl/strings/BUILD.bazel
 // NOTE: only builds files that Dawn requires
-fn addLibAbslStrings(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) *std.build.LibExeObjStep {
+fn addAbslStrings(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) *std.build.LibExeObjStep {
     const lib = b.addStaticLibrarySource("absl_strings", null);
     lib.setTarget(target);
     lib.setBuildMode(mode);

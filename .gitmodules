@@ -13,6 +13,3 @@
 [submodule "vulkan-headers"]
 	path = vulkan-headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers
-[submodule "vulkan-tools"]
-	path = vulkan-tools
-	url = https://github.com/KhronosGroup/Vulkan-Tools
