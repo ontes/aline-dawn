@@ -1,7 +1,7 @@
 # Building Dawn with Zig
 ## Build Instructions
-Clone the repo including submodueles and run `zig build` to build a shared library.
+Clone the repo including submodueles and run `zig build -Drelease-fast` to build a shared library in release mode.
 ## Status
 **Linux:** Everything works.  
-**Windows:** DirectX is broken, build with `-Denable-d3d12=false`. Shared library is broken for unknown reason.  
+**Windows:** DirectX is broken, build with `-Denable-d3d12=false`.
 **Mac:** Not tested.
