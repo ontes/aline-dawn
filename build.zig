@@ -5,7 +5,7 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const os_tag = target.os_tag orelse @import("builtin").target.os.tag;
-    const c_flags = &[_][]const u8{ "-std=c++17", "-g0" };
+    const c_flags = &[_][]const u8{ "-std=c++17", "-g0", "-fvisibility=hidden" };
 
     const enable_d3d12 = b.option(bool, "enable-d3d12", "enable DirectX 12 backend") orelse (os_tag == .windows);
     const enable_metal = b.option(bool, "enable-metal", "enable Metal backend") orelse (os_tag == .macos);
